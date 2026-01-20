@@ -1,7 +1,7 @@
 from registration import register_user
 from login import login_user
 from dashboard import dashboard
-import color
+
 
 print("----------------------- Welcome to Iffy's Money Bank -----------------------------")
 print("Your money is safe with us, making banking easy and secure!")
