@@ -140,7 +140,7 @@ def register_user():
         user_id = cursor.lastrowid
 
         cursor.execute("""
-        INSERT INTO transactions (user_id, type, amount)
+        INSERT INTO transactions (user_id, transaction_type, amount)
         VALUES (?, 'deposit', ?)
         """, (user_id, initial_deposit))
 
