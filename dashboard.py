@@ -1,99 +1,239 @@
 import sqlite3
-import hashlib
-import re
 import time
-from getpass import getpass
+import color
+from datetime import datetime
 
 DB_FILE = "bank_database.db"
 
-MAX_USERNAME_ATTEMPTS = 3
-MAX_PASSWORD_ATTEMPTS = 3
 
+def dashboard(user):
+    """
+    user tuple format:
+    (id, first_name, last_name, username, account_number, balance)
+    """
+    user_id, first_name, last_name, username, account_number, balance = user
 
-def hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode()).hexdigest()
+    print(f"\nWelcome {first_name.title()} {last_name.title()} 👋")
+    time.sleep(1)
 
+    while True:
+        print("""
+------------------ DASHBOARD ------------------
+1. Deposit
+2. Withdraw
+3. Check Balance
+4. Transaction History
+5. Transfer
+6. Logout
+----------------------------------------------
+""")
 
-def login_user():
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    cursor.execute("PRAGMA foreign_keys = ON;")
+        choice = input("Select an option (1-6): ").strip()
 
-    print("\n--- Login to Iffy's Money Bank ---")
-    print("Your money is our lifeline. Fret not, for we guard it with unwavering dedication.")
+        if choice == "1":
+            deposit(user_id)
+        elif choice == "2":
+            withdraw(user_id)
+        elif choice == "3":
+            check_balance(user_id)
+        elif choice == "4":
+            transaction_history(user_id)
+        elif choice == "5":
+            transfer(user_id, account_number)
+        elif choice == "6":
+            print("Logging out...")
+            time.sleep(1)
+            print("✅ Logged out successfully.\n")
+            break
+        else:
+            print("❌ Invalid selection. Try again.")
 
-    # ================= USERNAME AUTH =================
-    username_attempts = 0
-    user = None
+def deposit(user_id):
+    while True:
+        try:
+            amount = float(input("Enter deposit amount: ₦"))
 
-    while username_attempts < MAX_USERNAME_ATTEMPTS:
-        username = input("Enter your username (or 0 to cancel): ").strip().lower()
+            if amount <= 0:
+                print("❌ Deposit amount must be greater than zero.")
+                continue
 
-        if username == "0":
-            print("Login cancelled.")
-            conn.close()
-            return None
+            with sqlite3.connect(DB_FILE) as conn:
+                cursor = conn.cursor()
 
-        if not re.fullmatch(r"[a-z0-9_]+", username):
-            print("❌ Invalid username format.")
-            continue
+                cursor.execute(
+                    "SELECT balance FROM customer_info WHERE id = ?",
+                    (user_id,)
+                )
+                current_balance = cursor.fetchone()[0]
+
+                new_balance = current_balance + amount
+
+                cursor.execute(
+                    "UPDATE customer_info SET balance = ? WHERE id = ?",
+                    (new_balance, user_id)
+                )
+
+                cursor.execute("""
+                    INSERT INTO transactions (user_id, type, amount)
+                    VALUES (?, 'deposit', ?)
+                """, (user_id, amount))
+
+                conn.commit()
+
+            print("Processing deposit...")
+            time.sleep(2)
+            print(f"✅ Deposit successful. New balance: ₦{new_balance:.2f}")
+            break
+
+        except ValueError:
+            print("❌ Enter a valid amount.")
+
+def withdraw(user_id):
+    while True:
+        try:
+            amount = float(input("Enter withdrawal amount: ₦"))
+
+            if amount <= 0:
+                print("❌ Withdrawal amount must be greater than zero.")
+                continue
+
+            with sqlite3.connect(DB_FILE) as conn:
+                cursor = conn.cursor()
+
+                cursor.execute(
+                    "SELECT balance FROM customer_info WHERE id = ?",
+                    (user_id,)
+                )
+                current_balance = cursor.fetchone()[0]
+
+                if amount > current_balance:
+                    print("❌ Insufficient balance.")
+                    continue
+
+                new_balance = current_balance - amount
+
+                cursor.execute(
+                    "UPDATE customer_info SET balance = ? WHERE id = ?",
+                    (new_balance, user_id)
+                )
+
+                cursor.execute("""
+                    INSERT INTO transactions (user_id, type, amount)
+                    VALUES (?, 'withdrawal', ?)
+                """, (user_id, amount))
+
+                conn.commit()
+
+            print("Processing withdrawal...")
+            time.sleep(2)
+            print(f"✅ Withdrawal successful. New balance: ₦{new_balance:.2f}")
+            break
+
+        except ValueError:
+            print("❌ Enter a valid amount.")
+
+def check_balance(user_id):
+    with sqlite3.connect(DB_FILE) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT balance FROM customer_info WHERE id = ?",
+            (user_id,)
+        )
+        balance = cursor.fetchone()[0]
+
+    print("Fetching balance...")
+    time.sleep(1)
+    print(f"💰 Current balance: ₦{balance:.2f}")
+
+def transaction_history(user_id):
+    with sqlite3.connect(DB_FILE) as conn:
+        cursor = conn.cursor()
 
         cursor.execute("""
-            SELECT 
-                id,
-                first_name,
-                last_name,
-                username,
-                account_number,
-                balance,
-                password_hash
-            FROM customer_info
-            WHERE username = ?
-        """, (username,))
+            SELECT type, amount, timestamp
+            FROM transactions
+            WHERE user_id = ?
+            ORDER BY timestamp DESC
+        """, (user_id,))
 
-        user = cursor.fetchone()
+        records = cursor.fetchall()
 
-        if not user:
-            username_attempts += 1
-            remaining = MAX_USERNAME_ATTEMPTS - username_attempts
-            print(f"❌ Username not found. Attempts left: {remaining}")
-            continue
+    if not records:
+        print("📭 No transaction history found.")
+        return
 
-        break  # username is valid
+    print("\n--------- TRANSACTION HISTORY ---------")
+    print(f"{'Type':<15}{'Amount':<15}{'Date'}")
+    print("-" * 45)
 
-    if not user:
-        print("🚫 Too many invalid username attempts. Please try again later.")
-        conn.close()
-        return None
+    for t_type, amount, date in records:
+        print(f"{t_type:<15}₦{amount:<14.2f}{date}")
 
-    # ================= PASSWORD AUTH =================
-    password_attempts = 0
-    stored_password_hash = user[6]
+    print("-" * 45)
 
-    while password_attempts < MAX_PASSWORD_ATTEMPTS:
-        password = getpass("Enter your password: ").strip()
+def transfer(sender_id, sender_account):
+    try:
+        recipient_account = input("Enter recipient account number: ").strip()
 
-        if len(password) < 8 or len(password) > 30:
-            print("❌ Password length must be between 8 and 30 characters.")
-            continue
+        if recipient_account == sender_account:
+            print("❌ You cannot transfer to your own account.")
+            return
 
-        hashed_password = hash_password(password)
+        amount = float(input("Enter transfer amount: ₦"))
 
-        if hashed_password != stored_password_hash:
-            password_attempts += 1
-            remaining = MAX_PASSWORD_ATTEMPTS - password_attempts
-            print(f"❌ Incorrect password. Attempts left: {remaining}")
-            continue
+        if amount <= 0:
+            print("❌ Invalid transfer amount.")
+            return
 
-        # ================= SUCCESS =================
-        print("\nLogging in...")
+        with sqlite3.connect(DB_FILE) as conn:
+            cursor = conn.cursor()
+
+            # Sender balance
+            cursor.execute(
+                "SELECT balance FROM customer_info WHERE id = ?",
+                (sender_id,)
+            )
+            sender_balance = cursor.fetchone()[0]
+
+            if amount > sender_balance:
+                print("❌ Insufficient balance.")
+                return
+
+            # Recipient lookup
+            cursor.execute(
+                "SELECT id, balance FROM customer_info WHERE account_number = ?",
+                (recipient_account,)
+            )
+            recipient = cursor.fetchone()
+
+            if not recipient:
+                print("❌ Recipient account not found.")
+                return
+
+            recipient_id, recipient_balance = recipient
+
+            # Update balances
+            cursor.execute(
+                "UPDATE customer_info SET balance = ? WHERE id = ?",
+                (sender_balance - amount, sender_id)
+            )
+
+            cursor.execute(
+                "UPDATE customer_info SET balance = ? WHERE id = ?",
+                (recipient_balance + amount, recipient_id)
+            )
+
+            # Transactions
+            cursor.execute("""
+                INSERT INTO transactions (user_id, type, amount, target_account)
+                VALUES (?, 'transfer', ?, ?)
+            """, (sender_id, amount, recipient_account))
+
+            conn.commit()
+
+        print("Processing transfer...")
         time.sleep(2)
-        print("✅ Login successful!")
-        print(f"🏦 Welcome back, {user[1].title()} {user[2].title()}")
+        print("✅ Transfer completed successfully.")
 
-        conn.close()
-        return user[:6]  # exclude password hash
-
-    print("🚫 Too many failed password attempts. Account temporarily locked.")
-    conn.close()
-    return None
+    except ValueError:
+        print("❌ Enter a valid amount.")
