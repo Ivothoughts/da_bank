@@ -1,6 +1,5 @@
 import sqlite3
 import time
-import color
 from datetime import datetime
 
 DB_FILE = "bank_database.db"
