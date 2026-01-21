@@ -41,7 +41,7 @@ def dashboard(user):
             transfer(user_id, account_number)
         elif choice == "6":
             print("Logging out...")
-            time.sleep(1)
+            time.sleep(3)
             print("✅ Logged out successfully.\n")
             break
         else:
@@ -73,8 +73,8 @@ def deposit(user_id):
                 )
 
                 cursor.execute("""
-                    INSERT INTO transactions (user_id, type, amount)
-                    VALUES (?, 'deposit', ?)
+                    INSERT INTO transactions (user_id, transaction_type, amount)
+                    VALUES (?, 'Deposit', ?)
                 """, (user_id, amount))
 
                 conn.commit()
@@ -117,8 +117,8 @@ def withdraw(user_id):
                 )
 
                 cursor.execute("""
-                    INSERT INTO transactions (user_id, type, amount)
-                    VALUES (?, 'withdrawal', ?)
+                    INSERT INTO transactions (user_id, transaction_type, amount)
+                    VALUES (?, 'Withdrawal', ?)
                 """, (user_id, amount))
 
                 conn.commit()
@@ -149,7 +149,7 @@ def transaction_history(user_id):
         cursor = conn.cursor()
 
         cursor.execute("""
-            SELECT type, amount, timestamp
+            SELECT transaction_type, amount, timestamp, target_account
             FROM transactions
             WHERE user_id = ?
             ORDER BY timestamp DESC
@@ -162,13 +162,15 @@ def transaction_history(user_id):
         return
 
     print("\n--------- TRANSACTION HISTORY ---------")
-    print(f"{'Type':<15}{'Amount':<15}{'Date'}")
-    print("-" * 45)
+    print(f"{'Type':<15}{'Amount':<15}{'Target Account':<20}{'Date'}")
+    print("-" * 55)
 
-    for t_type, amount, date in records:
-        print(f"{t_type:<15}₦{amount:<14.2f}{date}")
+    for t_type, amount, date, target_account in records:
+        target_account = target_account if target_account is not None else "-"
+        print(f"{t_type:<15}₦{amount:<14.2f}{target_account:<20}{date}")
 
-    print("-" * 45)
+    print("-" * 55)
+
 
 def transfer(sender_id, sender_account):
     try:
@@ -224,8 +226,8 @@ def transfer(sender_id, sender_account):
 
             # Transactions
             cursor.execute("""
-                INSERT INTO transactions (user_id, type, amount, target_account)
-                VALUES (?, 'transfer', ?, ?)
+                INSERT INTO transactions (user_id, transaction_type, amount, target_account)
+                VALUES (?, 'Transfer', ?, ?)
             """, (sender_id, amount, recipient_account))
 
             conn.commit()
