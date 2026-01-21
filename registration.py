@@ -126,7 +126,15 @@ def register_user():
     # ---------- DATABASE INSERT ----------
     try:
         cursor.execute("""
-        INSERT INTO customer_info (first_name, last_name, username, password_hash, account_number, balance)
+        INSERT INTO customer_info (
+    first_name,
+    last_name,
+    username,
+    password_hash,
+    account_number,
+    balance
+)
+
         VALUES (?, ?, ?, ?, ?, ?)
         """, (
             first_name,
